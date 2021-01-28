@@ -10,20 +10,20 @@ function endswith(vec::Vector{T}, suffix::Vector{T}) where T
     liv >= lis && (view(vec, (liv - lis + 1):liv) == suffix)
 end
 
-include("./WebSocketFix.jl")
+# include("./WebSocketFix.jl")
 
 
 # to fix lots of false error messages from HTTP
 # https://github.com/JuliaWeb/HTTP.jl/pull/546
 # we do HTTP.Stream{HTTP.Messages.Request,S} instead of just HTTP.Stream to prevent the Julia warning about incremental compilation
-function HTTP.closebody(http::HTTP.Stream{HTTP.Messages.Request,S}) where S <: IO
-    if http.writechunked
-        http.writechunked = false
-        try
-            write(http.stream, "0\r\n\r\n")
-        catch end
-    end
-end
+# function HTTP.closebody(http::HTTP.Stream{HTTP.Messages.Request,S}) where S <: IO
+#     if http.writechunked
+#         http.writechunked = false
+#         try
+#             write(http.stream, "0\r\n\r\n")
+#         catch end
+#     end
+# end
 
 # https://github.com/JuliaWeb/HTTP.jl/pull/609
 HTTP.URIs.escapeuri(query::Union{Vector,Dict}) = isempty(query) ? HTTP.URIs.absent : join((HTTP.URIs.escapeuri(k, v) for (k, v) in query), "&")
