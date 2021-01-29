@@ -154,7 +154,7 @@ function run(session::ServerSession)
                             # It is formatted and MsgPack-encoded by send(...) in PlutoConnection.js
                             local parentbody
                             try
-                                message = collect(WebsocketFix.readmessage(clientstream))
+                                message = collect(HTTP.WebSockets.readframe(clientstream))
                                 parentbody = unpack(message)
 
                                 sleep(session.options.server.simulated_lag)
