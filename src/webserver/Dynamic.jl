@@ -79,7 +79,7 @@ responses[:reshow_cell] = function response_reshow_cell(🙋::ClientRequest)
     run = WorkspaceManager.format_fetch_in_workspace((🙋.session, 🙋.notebook), cell.cell_id, ends_with_semicolon(cell.code), (parse(PlutoRunner.ObjectID, 🙋.body["objectid"], base=16), convert(Int64, 🙋.body["dim"])))
     set_output!(cell, run)
     # send to all clients, why not
-    send_notebook_changes!(ClientRequest(🙋.session, 🙋.notebook, 🙋.body, missing))
+    send_notebook_changes!(ClientRequest(session=🙋.session, notebook=🙋.notebook))
 end
 
 
@@ -151,7 +151,7 @@ function send_notebook_changes!(🙋::ClientRequest; commentary::Any=nothing)
             current_dict = get(current_state_for_clients, client, :empty)
             patches = Firebasey.diff(current_dict, notebook_dict)
             patches_as_dicts::Array{Dict} = patches
-            current_state_for_clients[client] = deepcopy(notebook_dict)
+            current_state_for_clients[client] = deepcopy_only_dicts(notebook_dict)
 
             # Make sure we do send a confirmation to the client who made the request, even without changes
             is_response = 🙋.initiator !== nothing && client == 🙋.initiator.client
@@ -166,6 +166,15 @@ function send_notebook_changes!(🙋::ClientRequest; commentary::Any=nothing)
         end
     end
 end
+
+"Like `deepcopy`, but anything onther than `Dict` gets a shallow (reference) copy."
+function deepcopy_only_dicts(d::Dict{A,B}) where {A, B}
+    Dict{A,B}(
+        k => deepcopy_only_dicts(v)
+        for (k, v) in d
+    )
+end
+deepcopy_only_dicts(x) = x
 
 """
 A placeholder path. The path elements that it replaced will be given to the function as arguments.
