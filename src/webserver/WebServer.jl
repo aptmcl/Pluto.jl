@@ -10,8 +10,6 @@ function endswith(vec::Vector{T}, suffix::Vector{T}) where T
     liv >= lis && (view(vec, (liv - lis + 1):liv) == suffix)
 end
 
-# include("./WebSocketFix.jl")
-
 
 # to fix lots of false error messages from HTTP
 # https://github.com/JuliaWeb/HTTP.jl/pull/546
@@ -58,9 +56,9 @@ isurl(s::String) = startswith(s, "http://") || startswith(s, "https://")
 
 swallow_exception(f, exception_type::Type{T}) where T =
     try f()
-    catch e
-        isa(e, T) || rethrow(e)
-    end
+catch e
+    isa(e, T) || rethrow(e)
+end
 
 """
     Pluto.run()
@@ -149,28 +147,28 @@ function run(session::ServerSession)
                             return
                         end
                         try
-                        while !eof(clientstream)
+                            while !eof(clientstream)
                             # This stream contains data received over the WebSocket.
                             # It is formatted and MsgPack-encoded by send(...) in PlutoConnection.js
-                            local parentbody
-                            try
-                                message = collect(HTTP.WebSockets.readframe(clientstream))
-                                parentbody = unpack(message)
+                                local parentbody
+                                try
+                                    message = collect(HTTP.WebSockets.readframe(clientstream))
+                                    parentbody = unpack(message)
 
-                                sleep(session.options.server.simulated_lag)
+                                    sleep(session.options.server.simulated_lag)
 
-                                process_ws_message(session, parentbody, clientstream)
-                            catch ex
-                                if ex isa InterruptException
-                                    shutdown_server[]()
-                                elseif ex isa HTTP.WebSockets.WebSocketError || ex isa EOFError
+                                    process_ws_message(session, parentbody, clientstream)
+                                catch ex
+                                    if ex isa InterruptException
+                                        shutdown_server[]()
+                                    elseif ex isa HTTP.WebSockets.WebSocketError || ex isa EOFError
                                     # that's fine!
-                                else
-                                    bt = stacktrace(catch_backtrace())
-                                    @warn "Reading WebSocket client stream failed for unknown reason:" parentbody exception = (ex, bt)
+                                    else
+                                        bt = stacktrace(catch_backtrace())
+                                        @warn "Reading WebSocket client stream failed for unknown reason:" parentbody exception = (ex, bt)
+                                    end
                                 end
                             end
-                        end
                         catch ex
                             if ex isa InterruptException
                                 shutdown_server[]()
