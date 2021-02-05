@@ -10,18 +10,29 @@ function endswith(vec::Vector{T}, suffix::Vector{T}) where T
     liv >= lis && (view(vec, (liv - lis + 1):liv) == suffix)
 end
 
+# HTTP.WebSockets has :readmessage on the newer versions that don't need a patch
+isHTTPnewenough = isdefined(HTTP.WebSockets, :readmessage)
+
+readwsmessage = if isHTTPnewenough
+    HTTP.WebSockets.readframe
+else
+    include("./WebSocketFix.jl")
+    WebsocketFix.readmessage
+end
 
 # to fix lots of false error messages from HTTP
 # https://github.com/JuliaWeb/HTTP.jl/pull/546
 # we do HTTP.Stream{HTTP.Messages.Request,S} instead of just HTTP.Stream to prevent the Julia warning about incremental compilation
-# function HTTP.closebody(http::HTTP.Stream{HTTP.Messages.Request,S}) where S <: IO
-#     if http.writechunked
-#         http.writechunked = false
-#         try
-#             write(http.stream, "0\r\n\r\n")
-#         catch end
-#     end
-# end
+if !isHTTPnewenough
+    function HTTP.closebody(http::HTTP.Stream{HTTP.Messages.Request,S}) where S <: IO
+        if http.writechunked
+            http.writechunked = false
+            try
+                write(http.stream, "0\r\n\r\n")
+            catch end
+        end
+    end
+end
 
 # https://github.com/JuliaWeb/HTTP.jl/pull/609
 HTTP.URIs.escapeuri(query::Union{Vector,Dict}) = isempty(query) ? HTTP.URIs.absent : join((HTTP.URIs.escapeuri(k, v) for (k, v) in query), "&")
@@ -152,7 +163,7 @@ function run(session::ServerSession)
                             # It is formatted and MsgPack-encoded by send(...) in PlutoConnection.js
                                 local parentbody
                                 try
-                                    message = collect(HTTP.WebSockets.readframe(clientstream))
+                                    message = collect(readwsmessage(clientstream))
                                     parentbody = unpack(message)
 
                                     sleep(session.options.server.simulated_lag)
