@@ -44,7 +44,7 @@ current_module = Main
 
 function set_current_module(newname)
     # Revise.jl support
-    if isdefined(current_module, :Revise) && 
+    if isdefined(current_module, :Revise) &&
         isdefined(current_module.Revise, :revise) && current_module.Revise.revise isa Function &&
         isdefined(current_module.Revise, :revision_queue) && current_module.Revise.revision_queue isa AbstractSet
 
@@ -52,7 +52,7 @@ function set_current_module(newname)
             current_module.Revise.revise()
         end
     end
-    
+
     global default_iocontext = IOContext(default_iocontext, :module => current_module)
     global current_module = getfield(Main, newname)
 end
@@ -91,12 +91,32 @@ const computers = Dict{ObjectID,Computer}()
 
 const computer_workspace = Main
 
+using KhepriBase
+shapes_in_cell = Dict()
+
+saving_cell_shapes(fn, uuid) =
+  let shapes = get!(shapes_in_cell, uuid, Shape[]),
+      results = nothing
+    println("Evaluating cell ", uuid)
+    if shapes != []
+      println("Deleting shapes ", shapes)
+      delete_shapes(shapes)
+    end
+    with(collected_shapes, Shape[]) do
+        with(is_collecting_shapes, true) do
+            results = fn()
+        end
+        shapes_in_cell[uuid] = collected_shapes()
+        println("Collecting shapes ", shapes_in_cell[uuid])
+    end
+    results
+  end
 
 function register_computer(expr::Expr, key, input_globals::Vector{Symbol}, output_globals::Vector{Symbol})
     proof = ReturnProof()
 
     @gensym result
-    e = Expr(:function, Expr(:call, gensym(:function_wrapped_cell), input_globals...), Expr(:block, 
+    e = Expr(:function, Expr(:call, gensym(:function_wrapped_cell), input_globals...), Expr(:block,
         Expr(:(=), result, timed_expr(expr, proof)),
         Expr(:tuple,
             result,
@@ -105,7 +125,6 @@ function register_computer(expr::Expr, key, input_globals::Vector{Symbol}, outpu
     ))
 
     f = Core.eval(computer_workspace, e)
-
     computers[key] = Computer(f, proof, input_globals, output_globals)
 end
 
@@ -142,7 +161,7 @@ function timed_expr(expr::Expr, return_proof::Any=nothing)::Expr
     @gensym result
     @gensym elapsed_ns
     # we don't use `quote ... end` here to avoid the LineNumberNodes that it adds (these would taint the stack trace).
-    Expr(:block, 
+    Expr(:block,
         :(local $elapsed_ns = time_ns()),
         linenumbernode,
         :(local $result = $root),
@@ -191,6 +210,7 @@ If the third argument is a `Tuple{Set{Symbol}, Set{Symbol}}` containing the refe
 This function is memoized: running the same expression a second time will simply call the same generated function again. This is much faster than evaluating the expression, because the function only needs to be Julia-compiled once. See https://github.com/fonsp/Pluto.jl/pull/720
 """
 function run_expression(expr::Any, cell_id::UUID, function_wrapped_info::Union{Nothing,Tuple{Set{Symbol},Set{Symbol}}}=nothing)
+  saving_cell_shapes(cell_id) do
     cell_results[cell_id], cell_runtimes[cell_id] = if function_wrapped_info === nothing
         proof = ReturnProof()
         wrapped = timed_expr(expr, proof)
@@ -218,6 +238,7 @@ function run_expression(expr::Any, cell_id::UUID, function_wrapped_info::Union{N
             ans, runtime
         end
     end
+  end
 end
 
 
@@ -234,7 +255,7 @@ end
 
 
 """
-Move some of the globals over from one workspace to another. This is how Pluto "deletes" globals - it doesn't, it just executes your new code in a new module where those globals are not defined. 
+Move some of the globals over from one workspace to another. This is how Pluto "deletes" globals - it doesn't, it just executes your new code in a new module where those globals are not defined.
 
 Notebook code does run in `Main` - it runs in workspace modules. Every time that you run cells, a new module is created, called `Main.workspace123` with `123` an increasing number.
 
@@ -321,7 +342,7 @@ function delete_toplevel_methods(f::Function, cell_id::UUID)::Bool
     # if `f` is an extension to an external function, and we defined a method that overrides a method, for example,
     # we define `Base.isodd(n::Integer) = rand(Bool)`, which overrides the existing method `Base.isodd(n::Integer)`
     # calling `Base.delete_method` on this method won't bring back the old method, because our new method still exists in the method table, and it has a world age which is newer than the original. (our method has a deleted_world value set, which disables it)
-    # 
+    #
     # To solve this, we iterate again, and _re-enable any methods that were hidden in this way_, by adding them again to the method table with an even newer`primary_world`.
     if !isempty(deleted_sigs)
         to_insert = Method[]
@@ -457,7 +478,7 @@ const imagemimes = [MIME"image/svg+xml"(), MIME"image/png"(), MIME"image/jpg"(),
 # in descending order of coolness
 # text/plain always matches - almost always
 """
-The MIMEs that Pluto supports, in order of how much I like them. 
+The MIMEs that Pluto supports, in order of how much I like them.
 
 `text/plain` should always match - the difference between `show(::IO, ::MIME"text/plain", x)` and `show(::IO, x)` is an unsolved mystery.
 """
@@ -557,11 +578,11 @@ const struct_showmethod = which(show, (IO, 🥔))
 const struct_showmethod_mime = which(show, (IO, MIME"text/plain", 🥔))
 
 function use_tree_viewer_for_struct(@nospecialize(x::T))::Bool where T
-    # types that have no specialized show methods (their fallback is text/plain) are displayed using Pluto's interactive tree viewer. 
+    # types that have no specialized show methods (their fallback is text/plain) are displayed using Pluto's interactive tree viewer.
     # this is how we check whether this display method is appropriate:
     isstruct = try
         T isa DataType &&
-        # there are two ways to override the plaintext show method: 
+        # there are two ways to override the plaintext show method:
         which(show, (IO, MIME"text/plain", T)) === struct_showmethod_mime &&
         which(show, (IO, T)) === struct_showmethod
     catch
@@ -691,7 +712,7 @@ function tree_data(@nospecialize(x::AbstractArray{<:Any,1}), context::IOContext)
             tree_data_array_elements(x, indices[end+1-from_end:end], context)...,
         ]
     end
-    
+
     Dict{Symbol,Any}(
         :prefix => array_prefix(x),
         :objectid => string(objectid(x), base=16),
@@ -722,7 +743,7 @@ function tree_data(@nospecialize(x::AbstractDict{<:Any,<:Any}), context::IOConte
         end
         row_index += 1
     end
-    
+
     Dict{Symbol,Any}(
         :prefix => string(typeof(x) |> trynameof),
         :objectid => string(objectid(x), base=16),
@@ -760,7 +781,7 @@ function tree_data(@nospecialize(x::Any), context::IOContext)
     t = typeof(x)
     nf = nfields(x)
     nb = sizeof(x)
-    
+
     if Base.show_circular(context, x)
         Dict{Symbol,Any}(
             :objectid => string(objectid(x), base=16),
@@ -769,7 +790,7 @@ function tree_data(@nospecialize(x::Any), context::IOContext)
     else
         recur_io = IOContext(context, Pair{Symbol,Any}(:SHOWN_SET, x),
                                 Pair{Symbol,Any}(:typeinfo, Any))
-        
+
         elements = Any[
             let
                 f = fieldname(t, i)
@@ -782,7 +803,7 @@ function tree_data(@nospecialize(x::Any), context::IOContext)
             end
             for i in 1:nf
         ]
-    
+
         Dict{Symbol,Any}(
             :prefix => repr(t; context=context),
             :objectid => string(objectid(x), base=16),
@@ -852,7 +873,7 @@ function table_data(x::Any, io::IOContext)
             push!(row_data, (length(rows), row_data_for(last(rows))))
         end
     end
-    
+
     # TODO: render entire schema by default?
 
     schema = Tables.schema(rows)
@@ -1055,7 +1076,7 @@ end
 
 import Base: show
 function show(io::IO, ::MIME"text/html", bond::Bond)
-    withtag(io, :bond, :def => bond.defines) do 
+    withtag(io, :bond, :def => bond.defines) do
         show(io, MIME"text/html"(), bond.element)
     end
 end
