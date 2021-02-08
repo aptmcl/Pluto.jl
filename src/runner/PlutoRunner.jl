@@ -97,9 +97,9 @@ shapes_in_cell = Dict()
 saving_cell_shapes(fn, uuid) =
   let shapes = get!(shapes_in_cell, uuid, Shape[]),
       results = nothing
-    println("Evaluating cell ", uuid)
+    #println("Evaluating cell ", uuid)
     if shapes != []
-      println("Deleting shapes ", shapes)
+      #println("Deleting shapes ", shapes)
       delete_shapes(shapes)
     end
     with(collected_shapes, Shape[]) do
@@ -107,7 +107,7 @@ saving_cell_shapes(fn, uuid) =
             results = fn()
         end
         shapes_in_cell[uuid] = collected_shapes()
-        println("Collecting shapes ", shapes_in_cell[uuid])
+        #println("Collecting shapes ", shapes_in_cell[uuid])
     end
     results
   end
